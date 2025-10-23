@@ -20,11 +20,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
+        // Build participants markup
+        const participants = details.participants || [];
+        let participantsHtml = "";
+        if (participants.length === 0) {
+          participantsHtml = `<p class="participants-empty">No participants yet</p>`;
+        } else {
+          participantsHtml = `<div class="participants-section"><ul class="participants-list">`;
+          participants.forEach((p) => {
+            // Derive simple initials from the local part of an email or from the string
+            const local = (p.split && p.includes("@")) ? p.split("@")[0] : String(p);
+            const initials = local
+              .replace(/[_.\-]/g, " ")
+              .split(/\s+/)
+              .filter(Boolean)
+              .map((s) => s[0].toUpperCase())
+              .slice(0, 2)
+              .join("") || local.slice(0, 2).toUpperCase();
+
+            participantsHtml += `<li class="participant-item" data-activity="${name}" data-email="${p}">
+              <div class="participant-info">
+                <span class="participant-badge">${initials}</span>
+                <span class="participant-name">${p}</span>
+              </div>
+              <span class="delete-icon" title="Unregister participant">✕</span>
+            </li>`;
+          });
+          participantsHtml += `</ul></div>`;
+        }
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          ${participantsHtml}
         `;
 
         activitiesList.appendChild(activityCard);
@@ -62,6 +92,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh the activities list to show the new participant
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
@@ -78,6 +110,54 @@ document.addEventListener("DOMContentLoaded", () => {
       messageDiv.className = "error";
       messageDiv.classList.remove("hidden");
       console.error("Error signing up:", error);
+    }
+  });
+
+      // Function to unregister a participant
+  async function unregisterParticipant(activity, email) {
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`,
+        {
+          method: "POST",
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        messageDiv.textContent = result.message;
+        messageDiv.className = "success";
+        // Refresh the activities list
+        fetchActivities();
+      } else {
+        messageDiv.textContent = result.detail || "An error occurred";
+        messageDiv.className = "error";
+      }
+
+      messageDiv.classList.remove("hidden");
+
+      // Hide message after 5 seconds
+      setTimeout(() => {
+        messageDiv.classList.add("hidden");
+      }, 5000);
+    } catch (error) {
+      messageDiv.textContent = "Failed to unregister. Please try again.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      console.error("Error unregistering:", error);
+    }
+  }
+
+  // Add click event handler for delete icons
+  activitiesList.addEventListener("click", (event) => {
+    if (event.target.classList.contains("delete-icon")) {
+      const participantItem = event.target.closest(".participant-item");
+      if (participantItem) {
+        const activity = participantItem.dataset.activity;
+        const email = participantItem.dataset.email;
+        unregisterParticipant(activity, email);
+      }
     }
   });
 
